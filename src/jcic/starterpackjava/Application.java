@@ -14,22 +14,22 @@ import jcic.starterpackjava.entity.Move;
  */
 public class Application {
 
-    private final static String MY_EMAIL = "";
-    private final static String MY_PASSWORD = "";
-    private final static Long MY_PLAYER_ID = 2L;
+    private final static String MY_EMAIL = "John@test.uk";
+    private final static String MY_PASSWORD = "password";
+    private final static Long MY_PLAYER_ID = 7L;
     
     
     public static void main(String[] args) throws MalformedURLException, ProtocolException, IOException, InterruptedException {
 
         LoginCredentials credentials = new LoginCredentials(MY_EMAIL, MY_PASSWORD);
         
-        Connection.login(credentials);
+        long sessionToken = Connection.login(credentials);
         
-        Connection.joinQueue();
+        Connection.joinQueue(MY_PLAYER_ID, sessionToken);
         
-        Connection.waitWhileInQueue();
+        Connection.waitWhileInQueue(MY_PLAYER_ID);
         
-        Connection.findGame();
+        long GAME_ID = Connection.findGame(MY_PLAYER_ID);
         
         RandomBot bot = new RandomBot(MY_PLAYER_ID);
 

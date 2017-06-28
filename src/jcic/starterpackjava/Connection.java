@@ -24,28 +24,116 @@ import org.json.JSONObject;
  */
 public class Connection {
 
-    final static String JCIC_URL = "http://localhost:8080/";
+    final static String JCIC_URL = "http://127.0.0.1:8080/";
     static long MATCH_ID = 1;
     
-    public static void login(LoginCredentials credentials) {
-        //TODO
-        System.out.println("--Received Map");
+    private static JSONObject sendMessage(String urlString, String requestMethod, Object objectToSend)
+    {
+        //TODO send objectToSend
+        
+        try {
+            URL url = new URL(urlString);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+              
+            conn.setRequestMethod(requestMethod);
+            conn.setRequestProperty("Accept", "application/json");
+           
+            if ("POST".equals(requestMethod))
+            {
+                conn.setDoOutput(true);
 
+                String input = objectToSend.toString();
+
+                OutputStream os = conn.getOutputStream();
+                os.write(input.getBytes());
+                os.flush();
+            }
+            
+            conn.connect();
+            String responseMessage = conn.getResponseMessage();
+            int responseCode = conn.getResponseCode();
+            
+            BufferedReader br = new BufferedReader(new InputStreamReader((conn.getInputStream())));
+            String output;
+            StringBuilder sb = new StringBuilder();
+            while ((output = br.readLine()) != null) {
+                sb.append(output);
+            }
+            String data = new String(sb);
+            JSONObject jsonData = new JSONObject(data);
+            conn.disconnect();
+
+            return jsonData;
+
+        } catch (MalformedURLException ex) {
+            Logger.getLogger(Connection.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
+            Logger.getLogger(Connection.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+        return null;
+    }
+    
+    
+    public static long login(LoginCredentials credentials) {
+        
+        System.out.println("--Logging in");
+        JSONObject receivedMessage = sendMessage(JCIC_URL + "players/login", "POST", credentials);
+        if (receivedMessage.has("error"))
+        {
+            System.out.println("--Login failed");
+            throw new Error("Login failed, Please try different email and password values.");
+        }
+        else
+        {
+            System.out.println("--Login succeeded");
+            return receivedMessage.getLong("value");        
+        }
     }
 
-    public static void joinQueue() {
-        //TODO
-        System.out.println("--Joined Queue");
-    }
+    public static int joinQueue(long playerId, long sessionToken) {
+        JSONObject receivedMessage = sendMessage(JCIC_URL + "queue/" + playerId + "/" + sessionToken, "GET", null);
+        int pos = receivedMessage.getInt("value");
+        System.out.println("--Joined Queue : Pos in Queue : " + pos);
+        return pos;
+ }
 
-    public static void waitWhileInQueue() {
-        //TODO
+    public static void waitWhileInQueue(long playerId) {
+        
+        int pos = 999;
+        
+        while(true)
+        {
+            try {
+                JSONObject receivedMessage = sendMessage(JCIC_URL + "queue/" + playerId, "GET", null);
+                pos = receivedMessage.getInt("value");
+                
+                if (pos < 1) break;
+                Thread.sleep(1000);
+                System.out.println("-- pos : " + pos);
+            } catch (InterruptedException ex) {
+                Logger.getLogger(Connection.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
         System.out.println("--Queue Ended, Game started!");
+        
     }
 
-    public static void findGame() {
+    public static long findGame(long playerId) {
         //TODO
-        System.out.println("--Connected to game!");
+        JSONObject receivedMessage = sendMessage(JCIC_URL + "rounds/withPlayer/" + playerId, "GET", null);
+        JSONArray receivedMessages = new JSONArray(receivedMessage);
+        if (receivedMessages.toList().size() > 0)
+        {
+            JSONObject obj = receivedMessages.getJSONObject(0);
+            System.out.println("--match found!");
+            return obj.getLong("roundId");
+        }
+        else
+        {
+            throw new Error("No game was found");
+        }
     }
 
     public static void waitForNewTurn() {
@@ -58,73 +146,21 @@ public class Connection {
     }
 
     public static GameMap getMap() {
-        try {
-            URL url = new URL(JCIC_URL + "matches/" + MATCH_ID + "/map");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("Accept", "application/json");
-            conn.connect();
-            String responseMessage = conn.getResponseMessage();
-            int responseCode = conn.getResponseCode();
-
-            BufferedReader br = new BufferedReader(new InputStreamReader((conn.getInputStream())));
-            String output;
-            StringBuilder sb = new StringBuilder();
-            while ((output = br.readLine()) != null) {
-                sb.append(output);
-            }
-            String gameMapText = new String(sb);
-            JSONObject jsonMap = new JSONObject(gameMapText);
-            GameMap gameMap = new GameMap(jsonMap);
-            conn.disconnect();
-            System.out.println("--Map Received");
-
-            return gameMap;
-
-        } catch (MalformedURLException ex) {
-            Logger.getLogger(Connection.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger(Connection.class.getName()).log(Level.SEVERE, null, ex);
-        }
-
-        return null;
+            
+        JSONObject jsonMap = sendMessage(JCIC_URL + "rounds/" + MATCH_ID + "/map", "GET", null);
+        GameMap gameMap = new GameMap(jsonMap);
+        System.out.println("--Map Received");
+        return gameMap;
     }
 
     public static void sendMoves(long myId, List<Move> moves) {
 
         if (moves.isEmpty()) return;
         
-        try {
+        JSONArray jsonArray = new JSONArray(moves);
+        JSONObject receivedMessage = sendMessage(JCIC_URL + "rounds/" + MATCH_ID + "/players/" + myId + "/moves", "POST", jsonArray);
+        System.out.println("--Sent " + moves.size() + " moves.");
 
-            URL url = new URL(JCIC_URL + "matches/" + MATCH_ID + "/players/" + myId + "/moves");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setDoOutput(true);
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Accept", "application/json");
-            conn.setRequestProperty("Content-type", "application/json");
-
-            JSONArray jsonObject = new JSONArray(moves);
-            String input = jsonObject.toString();
-
-            OutputStream os = conn.getOutputStream();
-            os.write(input.getBytes());
-            os.flush();
-
-            BufferedReader br = new BufferedReader(new InputStreamReader((conn.getInputStream())));
-
-            String output;
-            while ((output = br.readLine()) != null) {
-                System.out.print(output);
-            }
-
-            conn.disconnect();
-            System.out.println("--Sent " + moves.size() + " moves.");
-
-        } catch (ProtocolException ex) {
-            Logger.getLogger(Connection.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger(Connection.class.getName()).log(Level.SEVERE, null, ex);
-        }
     }
 
 }
