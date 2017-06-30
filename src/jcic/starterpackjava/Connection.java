@@ -24,7 +24,7 @@ import org.json.JSONObject;
  */
 public class Connection {
 
-    final static String JCIC_URL = "http://127.0.0.1:8080/";
+    final static String JCIC_URL = "http://172.16.32.50:8080/";
     static long MATCH_ID = 1;
     
     private static JSONObject sendMessage(String urlString, String requestMethod, Object objectToSend)
